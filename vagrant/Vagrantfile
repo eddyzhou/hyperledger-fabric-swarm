@@ -1,0 +1,54 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$script = <<SCRIPT
+  sudo apt-get update
+  #sudo apt-get install -y software-properties-common python-software-properties
+  #sudo add-apt-repository ppa:webupd8team/java
+  #sudo apt-get install -y oracle-java8-installer
+  #sudo apt-get install -y oracle-java8-set-default
+  sudo apt-get install -y openjdk-8-jdk
+  sudo apt-get install -y git
+  sudo apt-get install -y vim
+  wget https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.10.3.linux-amd64.tar.gz
+  echo "export PATH=$PATH:/usr/local/go/bin"  >> /home/vagrant/.bashrc
+  rm -f go1.10.3.linux-amd64.tar.gz
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  config.vm.define :bc0 do |bc0|
+    bc0.vm.provider "virtualbox" do |v|
+      v.customize ["modifyvm", :id, "--name", "bc0", "--memory", "2048"]
+    end
+    bc0.vm.box = "envimation/ubuntu-xenial-docker"
+    bc0.vm.hostname = "bc0"
+    bc0.vm.network "private_network", ip: "192.168.33.10"
+    bc0.vm.box_check_update = false
+    bc0.vm.synced_folder "../fabric_dockerswarm", "/home/vagrant/fabric_dockerswarm"
+    bc0.vm.provision "shell", inline: $script
+  end
+
+  config.vm.define :bc1 do |bc1|
+    bc1.vm.provider "virtualbox" do |v|
+      v.customize ["modifyvm", :id, "--name", "bc1", "--memory", "2048"]
+    end
+    bc1.vm.box = "envimation/ubuntu-xenial-docker"
+    bc1.vm.hostname = "bc1"
+    bc1.vm.network "private_network", ip: "192.168.33.11"
+    bc1.vm.box_check_update = false
+    bc1.vm.synced_folder "../fabric_dockerswarm", "/home/vagrant/fabric_dockerswarm"
+    bc1.vm.provision "shell", inline: $script
+  end
+
+  config.vm.define :bc2 do |bc2|
+    bc2.vm.provider "virtualbox" do |v|
+      v.customize ["modifyvm", :id, "--name", "bc2", "--memory", "2048"]
+    end
+    bc2.vm.box = "envimation/ubuntu-xenial-docker"
+    bc2.vm.hostname = "bc2"
+    bc2.vm.network "private_network", ip: "192.168.33.12"
+    bc2.vm.box_check_update = false
+    bc2.vm.synced_folder "../fabric_dockerswarm", "/home/vagrant/fabric_dockerswarm"
+    bc2.vm.provision "shell", inline: $script
+  end
+end

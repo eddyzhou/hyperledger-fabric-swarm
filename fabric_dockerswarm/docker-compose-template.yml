@@ -1,0 +1,881 @@
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+version: '3.3'
+
+services:
+  ca0:
+    image: hyperledger/fabric-ca:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-org1
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca.org1.example.com-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/CA1_PRIVATE_KEY
+    ports:
+      - target: 7054
+        published: 7054
+        protocol: tcp
+        mode: host
+    command: sh -c 'fabric-ca-server start --ca.certfile /etc/hyperledger/fabric-ca-server-config/ca.org1.example.com-cert.pem --ca.keyfile /etc/hyperledger/fabric-ca-server-config/CA1_PRIVATE_KEY -b admin:adminpw -d'
+    volumes:
+      - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org1.example.com/ca/:/etc/hyperledger/fabric-ca-server-config
+      - ca0_Data:/etc/hyperledger/fabric-ca-server
+
+  ca1:
+    image: hyperledger/fabric-ca:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-org2
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca.org2.example.com-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/CA2_PRIVATE_KEY
+    ports:
+      - target: 7054
+        published: 8054
+        protocol: tcp
+        mode: host
+    command: sh -c 'fabric-ca-server start --ca.certfile /etc/hyperledger/fabric-ca-server-config/ca.org2.example.com-cert.pem --ca.keyfile /etc/hyperledger/fabric-ca-server-config/CA2_PRIVATE_KEY -b admin:adminpw -d'
+    volumes:
+      - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org2.example.com/ca/:/etc/hyperledger/fabric-ca-server-config
+      - ca1_Data:/etc/hyperledger/fabric-ca-server
+
+  zookeeper0:
+    image: hyperledger/fabric-zookeeper:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE1_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      ZOO_MY_ID: "0"
+      ZOO_DATA_DIR: /var/data/zookeeper
+      ZOO_SERVERS:  "server.0=0.0.0.0:2888:3888 server.1=zookeeper1:2888:3888 server.2=zookeeper2:2888:3888"
+    volumes:
+      - zk0_Data:/var/data/zookeeper
+
+  zookeeper1:
+    image: hyperledger/fabric-zookeeper:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      ZOO_MY_ID: "1"
+      ZOO_DATA_DIR: /var/data/zookeeper
+      ZOO_SERVERS:  "server.0=zookeeper0:2888:3888 server.1=0.0.0.0:2888:3888 server.2=zookeeper2:2888:3888"
+    volumes:
+      - zk1_Data:/var/data/zookeeper
+
+  zookeeper2:
+    image: hyperledger/fabric-zookeeper:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      ZOO_MY_ID: "2"
+      ZOO_DATA_DIR: /var/data/zookeeper
+      ZOO_SERVERS:  "server.0=zookeeper0:2888:3888 server.1=zookeeper1:2888:3888 server.2=0.0.0.0:2888:3888"
+    volumes:
+      - zk2_Data:/var/data/zookeeper
+
+  kafka0:
+    image: hyperledger/fabric-kafka:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE1_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      KAFKA_HOST_NAME: kafka0
+      #KAFKA_ADVERTISED_HOST_NAME: kafka0
+      #KAFKA_LISTENERS: PLAINTEXT://kafka0:9092,SSL://kafka0:9093
+      KAFKA_LISTENERS: SSL://kafka0:9093
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka0:9096,SSL://kafka0:9092
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2
+      KAFKA_SSL_KEYSTORE_LOCATION: /var/keystore/server.keystore.jks.kafka0
+      KAFKA_SSL_KEYSTORE_PASSWORD: adminpw
+      KAFKA_SSL_PASSWORD: adminpw
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /var/keystore/server.truststore.jks.kafka0
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: adminpw
+      KAFKA_MESSAGE_MAX_BYTES: 103809024
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 103809024
+      KAFKA_BROKER_ID: 0
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper0:2181,zookeeper1:2181,zookeeper2:2181/k0"
+      KAFKA_LOG_DIRS: /var/log/kafka
+    volumes:
+      - kafka0_Data:/opt/kafka
+      - kafka0_Log_Data:/var/log/kafka
+      - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/kafkaKeystore:/var/keystore
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+
+  kafka1:
+    image: hyperledger/fabric-kafka:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      KAFKA_HOST_NAME: kafka1
+      #KAFKA_ADVERTISED_HOST_NAME: kafka1
+      #KAFKA_LISTENERS: PLAINTEXT://kafka1:9092,SSL://kafka1:9093
+      KAFKA_LISTENERS: SSL://kafka1:9093
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,SSL://kafka1:9093
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2
+      KAFKA_SSL_KEYSTORE_LOCATION: /var/keystore/server.keystore.jks.kafka1
+      KAFKA_SSL_KEYSTORE_PASSWORD: adminpw
+      KAFKA_SSL_PASSWORD: adminpw
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /var/keystore/server.truststore.jks.kafka1
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: adminpw
+      KAFKA_MESSAGE_MAX_BYTES: 103809024
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 103809024
+      KAFKA_BROKER_ID: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper0:2181,zookeeper1:2181,zookeeper2:2181/k0"
+      KAFKA_LOG_DIRS: /var/log/kafka
+    volumes:
+      - kafka1_Data:/opt/kafka
+      - kafka1_Log_Data:/var/log/kafka
+      - /usr/local/fabric/e2e_cli/kafkaKeystore:/var/keystore
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+
+  kafka2:
+    image: hyperledger/fabric-kafka:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      KAFKA_HOST_NAME: kafka2
+      #KAFKA_ADVERTISED_HOST_NAME: kafka2
+      #KAFKA_LISTENERS: PLAINTEXT://kafka2:9092,SSL://kafka2:9093
+      KAFKA_LISTENERS: SSL://kafka2:9093
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092,SSL://kafka2:9094
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2
+      KAFKA_SSL_KEYSTORE_LOCATION: /var/keystore/server.keystore.jks.kafka2
+      KAFKA_SSL_KEYSTORE_PASSWORD: adminpw
+      KAFKA_SSL_PASSWORD: adminpw
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /var/keystore/server.truststore.jks.kafka2
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: adminpw
+      KAFKA_MESSAGE_MAX_BYTES: 103809024
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 103809024
+      KAFKA_BROKER_ID: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper0:2181,zookeeper1:2181,zookeeper2:2181/k0"
+      KAFKA_LOG_DIRS: /var/log/kafka
+    volumes:
+      - kafka2_Data:/opt/kafka
+      - kafka2_Log_Data:/var/log/kafka
+      - /usr/local/fabric/e2e_cli/kafkaKeystore:/var/keystore
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+
+  kafka3:
+    image: hyperledger/fabric-kafka:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      KAFKA_HOST_NAME: kafka3
+      #KAFKA_ADVERTISED_HOST_NAME: kafka3
+      #KAFKA_LISTENERS: PLAINTEXT://kafka3:9092,SSL://kafka3:9093
+      KAFKA_LISTENERS: SSL://kafka3:9093
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092,SSL://kafka3:9095
+      KAFKA_SECURITY_INTER_BROKER_PROTOCOL: SSL
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2
+      KAFKA_SSL_KEYSTORE_LOCATION: /var/keystore/server.keystore.jks.kafka3
+      KAFKA_SSL_KEYSTORE_PASSWORD: adminpw
+      KAFKA_SSL_PASSWORD: adminpw
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /var/keystore/server.truststore.jks.kafka3
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: adminpw
+      KAFKA_MESSAGE_MAX_BYTES: 103809024
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 103809024
+      KAFKA_BROKER_ID: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper0:2181,zookeeper1:2181,zookeeper2:2181/k0"
+      KAFKA_LOG_DIRS: /var/log/kafka
+    volumes:
+      - kafka3_Data:/opt/kafka
+      - kafka3_Log_Data:/var/log/kafka
+      - /usr/local/fabric/e2e_cli/kafkaKeystore:/var/keystore
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+
+  orderer0:
+    image: hyperledger/fabric-orderer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE1_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      # enabled kafka TLS
+      - ORDERER_KAFKA_VERBOSE=true
+      - ORDERER_KAFKA_TLS_ENABLED=true
+      - ORDERER_KAFKA_TLS_PRIVATEKEY_FILE=/var/keystore/client-key-orderer0.pem
+      - ORDERER_KAFKA_TLS_CERTIFICATE_FILE=/var/keystore/client-cert-signed-orderer0.pem
+      - ORDERER_KAFKA_TLS_ROOTCAS_FILE=/var/keystore/ca-cert.pem
+      - ORDERER_KAFKA_RETRY_SHORTINTERVAL=1s
+      - ORDERER_KAFKA_RETRY_SHORTTOTAL=10m
+      - ORDERER_GENERAL_LOGLEVEL=debug
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_FILELEDGER_LOCATION=/var/hyperledger/fabric/orderer
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      # enabled TLS
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    volumes:
+      - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/crypto-config/ordererOrganizations/example.com/orderers/orderer0/msp:/var/hyperledger/orderer/msp
+      - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/crypto-config/ordererOrganizations/example.com/orderers/orderer0/tls/:/var/hyperledger/orderer/tls
+      - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/kafkaKeystore:/var/keystore
+      - orderer0_Data:/var/hyperledger/fabric/orderer
+    ports:
+      - target: 7050
+        published: 7055
+        protocol: tcp
+        mode: host
+    depends_on:
+      - kafka0
+      - kafka1
+      - kafka2
+      - kafka3
+
+  orderer1:
+    image: hyperledger/fabric-orderer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      # enabled kafka TLS
+      - ORDERER_KAFKA_VERBOSE=true
+      - ORDERER_KAFKA_TLS_ENABLED=true
+      - ORDERER_KAFKA_TLS_PRIVATEKEY_FILE=/var/keystore/client-key-orderer1.pem
+      - ORDERER_KAFKA_TLS_CERTIFICATE_FILE=/var/keystore/client-cert-signed-orderer1.pem
+      - ORDERER_KAFKA_TLS_ROOTCAS_FILE=/var/keystore/ca-cert.pem
+      - ORDERER_KAFKA_RETRY_SHORTINTERVAL=1s
+      - ORDERER_KAFKA_RETRY_SHORTTOTAL=10m
+      - ORDERER_GENERAL_LOGLEVEL=debug
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_FILELEDGER_LOCATION=/var/hyperledger/fabric/orderer
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      # enabled TLS
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    volumes:
+      - /usr/local/fabric/e2e_cli/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - /usr/local/fabric/e2e_cli/crypto-config/ordererOrganizations/example.com/orderers/orderer1/msp:/var/hyperledger/orderer/msp
+      - /usr/local/fabric/e2e_cli/crypto-config/ordererOrganizations/example.com/orderers/orderer1/tls/:/var/hyperledger/orderer/tls
+      - /usr/local/fabric/e2e_cli/kafkaKeystore:/var/keystore
+      - orderer1_Data:/var/hyperledger/fabric/orderer
+    ports:
+      - target: 7050
+        published: 7056
+        protocol: tcp
+        mode: host
+    depends_on:
+      - kafka0
+      - kafka1
+      - kafka2
+      - kafka3
+
+  orderer2:
+    image: hyperledger/fabric-orderer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      # enabled kafka TLS
+      - ORDERER_KAFKA_VERBOSE=true
+      - ORDERER_KAFKA_TLS_ENABLED=true
+      - ORDERER_KAFKA_TLS_PRIVATEKEY_FILE=/var/keystore/client-key-orderer2.pem
+      - ORDERER_KAFKA_TLS_CERTIFICATE_FILE=/var/keystore/client-cert-signed-orderer2.pem
+      - ORDERER_KAFKA_TLS_ROOTCAS_FILE=/var/keystore/ca-cert.pem
+      - ORDERER_KAFKA_RETRY_SHORTINTERVAL=1s
+      - ORDERER_KAFKA_RETRY_SHORTTOTAL=10m
+      - ORDERER_GENERAL_LOGLEVEL=debug
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_FILELEDGER_LOCATION=/var/hyperledger/fabric/orderer
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      # enabled TLS
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    volumes:
+      - /usr/local/fabric/e2e_cli/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - /usr/local/fabric/e2e_cli/crypto-config/ordererOrganizations/example.com/orderers/orderer2/msp:/var/hyperledger/orderer/msp
+      - /usr/local/fabric/e2e_cli/crypto-config/ordererOrganizations/example.com/orderers/orderer2/tls/:/var/hyperledger/orderer/tls
+      - /usr/local/fabric/e2e_cli/kafkaKeystore:/var/keystore
+      - orderer2_Data:/var/hyperledger/fabric/orderer
+    ports:
+      - target: 7050
+        published: 7057
+        protocol: tcp
+        mode: host
+    depends_on:
+      - kafka0
+      - kafka1
+      - kafka2
+      - kafka3
+
+  couchdb0:
+    image: hyperledger/fabric-couchdb:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    volumes:
+     - couchdb0:/opt/couchdb/data
+    # Comment/Uncomment the port mapping if you want to hide/expose the CouchDB service,
+    # for example map it to utilize Fauxton User Interface in dev environments.
+
+  peer0Org1:
+    image: hyperledger/fabric-peer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      # the following setting starts chaincode containers on the same
+      # bridge network as the peers
+      # https://docs.docker.com/compose/networking/
+      #- CORE_PEER_ENDORSER_ENABLED=true
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=host
+      #- CORE_LOGGING_LEVEL=ERROR
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb0:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0Org1
+      - CORE_PEER_ADDRESS=NODE2_IP:7051
+      - CORE_PEER_NETWORKID=dev
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_EVENTS_ADDRESS=0.0.0.0:7053
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=NODE2_IP:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+    volumes:
+        - /var/run/:/host/var/run/
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org1.example.com/peers/peer0Org1/msp:/etc/hyperledger/fabric/msp
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org1.example.com/peers/peer0Org1/tls:/etc/hyperledger/fabric/tls
+        - peer0Org1:/var/hyperledger/production
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    ports:
+      - target: 7051
+        published: 7051
+        protocol: tcp
+        mode: host
+      - target: 7052
+        published: 7052
+        protocol: tcp
+        mode: host
+      - target: 7053
+        published: 7053
+        protocol: tcp
+        mode: host
+    depends_on:
+      - couchdb0
+
+  couchdb1:
+    image: hyperledger/fabric-couchdb:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    volumes:
+     - couchdb1:/opt/couchdb/data
+    # Comment/Uncomment the port mapping if you want to hide/expose the CouchDB service,
+    # for example map it to utilize Fauxton User Interface in dev environments.
+
+  peer1Org1:
+    image: hyperledger/fabric-peer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE2_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      # the following setting starts chaincode containers on the same
+      # bridge network as the peers
+      # https://docs.docker.com/compose/networking/
+      #- CORE_PEER_ENDORSER_ENABLED=true
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=host
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb1:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      #- CORE_LOGGING_LEVEL=ERROR8051
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer1Org1
+      - CORE_PEER_ADDRESS=NODE2_IP:8051
+      - CORE_PEER_NETWORKID=dev
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_EVENTS_ADDRESS=0.0.0.0:7053
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:8052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=NODE2_IP:8051
+      - CORE_PEER_GOSSIP_BOOTSTRAP=NODE2_IP:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+    volumes:
+        - /var/run/:/host/var/run/
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org1.example.com/peers/peer1Org1/msp:/etc/hyperledger/fabric/msp
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org1.example.com/peers/peer1Org1/tls:/etc/hyperledger/fabric/tls
+        - peer1Org1:/var/hyperledger/production
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    ports:
+      - target: 7051
+        published: 8051
+        protocol: tcp
+        mode: host
+      - target: 7052
+        published: 8052
+        protocol: tcp
+        mode: host
+      - target: 7053
+        published: 8053
+        protocol: tcp
+        mode: host
+    depends_on:
+      - couchdb1
+
+  couchdb2:
+    image: hyperledger/fabric-couchdb:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw 
+    volumes:
+     - couchdb2:/opt/couchdb/data
+    # Comment/Uncomment the port mapping if you want to hide/expose the CouchDB service,
+    # for example map it to utilize Fauxton User Interface in dev environments.
+
+  peer0Org2:
+    image: hyperledger/fabric-peer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      # the following setting starts chaincode containers on the same
+      # bridge network as the peers
+      # https://docs.docker.com/compose/networking/
+      #- CORE_PEER_ENDORSER_ENABLED=true
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=host
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb2:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      #- CORE_LOGGING_LEVEL=ERROR
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0Org2
+      - CORE_PEER_ADDRESS=NODE3_IP:7051
+      - CORE_PEER_NETWORKID=dev
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_EVENTS_ADDRESS=0.0.0.0:7053
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=NODE3_IP:7051
+      - CORE_PEER_LOCALMSPID=Org2MSP
+    volumes:
+        - /var/run/:/host/var/run/
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org2.example.com/peers/peer0Org2/msp:/etc/hyperledger/fabric/msp
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org2.example.com/peers/peer0Org2/tls:/etc/hyperledger/fabric/tls
+        - peer0Org2:/var/hyperledger/production
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    ports:
+      - target: 7051
+        published: 7051
+        protocol: tcp
+        mode: host
+      - target: 7052
+        published: 7052
+        protocol: tcp
+        mode: host
+      - target: 7053
+        published: 7053
+        protocol: tcp
+        mode: host
+    depends_on:
+      - couchdb2
+
+  couchdb3:
+    image: hyperledger/fabric-couchdb:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      endpoint_mode: dnsrr
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw 
+    volumes:
+     - couchdb3:/opt/couchdb/data
+    # Comment/Uncomment the port mapping if you want to hide/expose the CouchDB service,
+    # for example map it to utilize Fauxton User Interface in dev environments.
+
+  peer1Org2:
+    image: hyperledger/fabric-peer:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE3_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      # the following setting starts chaincode containers on the same
+      # bridge network as the peers
+      # https://docs.docker.com/compose/networking/
+      #- CORE_PEER_ENDORSER_ENABLED=true
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=host
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb3:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      #- CORE_LOGGING_LEVEL=ERROR
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer1Org2
+      - CORE_PEER_ADDRESS=NODE3_IP:8051
+      - CORE_PEER_NETWORKID=dev
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_EVENTS_ADDRESS=0.0.0.0:7053
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:8052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=NODE3_IP:8051
+      - CORE_PEER_GOSSIP_BOOTSTRAP=NODE3_IP:7051
+      - CORE_PEER_LOCALMSPID=Org2MSP
+    volumes:
+        - /var/run/:/host/var/run/
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org2.example.com/peers/peer1Org2/msp:/etc/hyperledger/fabric/msp
+        - /usr/local/fabric/e2e_cli/crypto-config/peerOrganizations/org2.example.com/peers/peer1Org2/tls:/etc/hyperledger/fabric/tls
+        - peer1Org2:/var/hyperledger/production
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    ports:
+      - target: 7051
+        published: 8051
+        protocol: tcp
+        mode: host
+      - target: 7052
+        published: 8052
+        protocol: tcp
+        mode: host
+      - target: 7053
+        published: 8053
+        protocol: tcp
+        mode: host
+    depends_on:
+      - couchdb3
+
+  cli:
+    image: hyperledger/fabric-tools:IMAGE_TAG
+    networks:
+      - fabric-network
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == NODE1_HOSTNAME
+      update_config:
+        parallelism: 1
+        delay: 2s
+      restart_policy:
+        condition: on-failure
+    tty: true
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_ID=cli
+      - CORE_PEER_ADDRESS=NODE2_IP:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0Org1/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0Org1/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0Org1/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    volumes:
+        - /var/run/:/host/var/run/
+        - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/chaincode:/opt/gopath/src/github.com/hyperledger/fabric/examples/chaincode/go
+        - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+        - /usr/local/fabric/hyperledger-fabric-swarm/fabric_dockerswarm/channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts
+    depends_on:
+      - orderer0
+      - orderer1
+      - orderer2
+      - peer0Org1
+      - peer1Org1
+      - peer0Org2
+      - peer1Org2
+
+#named volumes data path: /var/lib/docker/volumes
+volumes:
+  zk0_Data:
+  zk1_Data:
+  zk2_Data:
+  ca0_Data:
+  ca1_Data:
+  kafka0_Log_Data:
+  kafka1_Log_Data:
+  kafka2_Log_Data:
+  kafka3_Log_Data:
+  kafka0_Data:
+  kafka1_Data:
+  kafka2_Data:
+  kafka3_Data:
+  orderer0_Data:
+  orderer1_Data:
+  orderer2_Data:
+  couchdb0:
+  couchdb1:
+  couchdb2:
+  couchdb3:
+  peer0Org1:
+  peer0Org2:
+  peer1Org1:
+  peer1Org2:
+
+networks:
+  fabric-network:
+    external: true
+    driver: overlay
+    ipam:
+      config:
+        - subnet: "10.0.7.0/24"

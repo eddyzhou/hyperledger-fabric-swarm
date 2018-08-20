@@ -1,0 +1,12 @@
+.idea/
+*.iml
+*.swp
+*.log
+vagrant/.vagrant/
+fabric_dockerswarm/channel-artifacts/
+fabric_dockerswarm/crypto-config/
+fabric_dockerswarm/kafkaKeystore/
+fabric_dockerswarm/configtxgen
+fabric_dockerswarm/cryptogen
+fabric_dockerswarm/bin
+fabric_dockerswarm/docker-compose.yml
